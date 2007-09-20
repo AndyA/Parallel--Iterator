@@ -1,9 +1,12 @@
 Build.PL
 Changes
+examples/cpan-faces.pl
 lib/Parallel/Workers.pm
 Makefile.PL
 MANIFEST
 README
-t/00.load.t
+t/000-load.t
+t/010-basic.t
 xt/author/pod-coverage.t
 xt/author/pod.t
+META.yml

@@ -8,6 +8,8 @@ use IO::Handle;
 use IO::Select;
 use Config;
 
+require 5.008;
+
 our $VERSION = '0.1.0';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );

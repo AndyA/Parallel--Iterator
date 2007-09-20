@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 9;
+use Test::More tests => 10;
 use Parallel::Workers qw( iterate iterate_as_array iterate_as_hash );
 
 sub array_iter {
@@ -121,4 +121,19 @@ for my $workers ( 0, 1, 2, 10 ) {
     $_ *= 3 for values %expect;
 
     is_deeply \%output, \%expect, "iterate_as_hash";
+}
+
+# Empty input
+{
+    my @input = ();
+    my @got   = iterate_as_array(
+        { workers => 1 },
+        sub {
+            my ( $id, $job ) = @_;
+            return $job * 5;
+        },
+        \@input
+    );
+
+    is_deeply \@got, \@input, "array iterator";
 }
