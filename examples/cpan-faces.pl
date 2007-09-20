@@ -3,8 +3,6 @@
 use strict;
 use warnings;
 use HTML::Tiny;
-use URI::Escape qw(uri_escape);
-use Digest::MD5 qw(md5_hex);
 use LWP::UserAgent;
 use File::Spec;
 use File::Path;
@@ -16,11 +14,11 @@ use Parallel::Workers qw( iterate );
 $| = 1;
 
 use constant MAIL_RC   => 'http://cpan.perl.org/authors/01mailrc.txt.gz';
+use constant ICON_BASE => 'http://search.cpan.org/gravatar';
 use constant AUTHOR    => 'http://search.cpan.org/~';
 use constant OUTPUT    => 'cpan-faces';
 use constant STATE     => File::Spec->catfile( OUTPUT, 'work.yml' );
 use constant SIZE      => 80;
-use constant ICON_BASE => 'http://search.cpan.org/gravatar';
 
 my $UPDATE = 0;
 
@@ -229,29 +227,3 @@ sub get_icon {
     return;
 }
 
-# sub get_icon {
-#     my $resp = $ua->get( gravatar_url( @_ ) );
-#     if ( $resp->is_success ) {
-#         return ( $resp->content, $resp->header( 'Content-Type' ) );
-#     }
-#     else {
-#         die join ' ', $resp->code, $resp->message;
-#     }
-# }
-#
-# sub gravatar_url {
-#     my $email   = shift;
-#     my $size    = shift || SIZE;
-#     my $default = shift;
-#
-#     my $h = HTML::Tiny->new;
-#
-#     return join '?', GRAVATAR,
-#       $h->query_encode(
-#         {
-#             gravatar_id => md5_hex( $email ),
-#             size        => $size,
-#             $default ? ( default => $default ) : (),
-#         }
-#       );
-# }
