@@ -13,7 +13,7 @@ my $build_class = Module::Build->subclass(
     SUBCLASS
 );
 
-my $builder = Module::Build->new(
+my $builder = $build_class->new(
     module_name       => 'Parallel::Workers',
     license           => 'perl',
     dist_author       => 'Andy Armstrong <andy@hexten.net>',

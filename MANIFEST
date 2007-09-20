@@ -5,5 +5,5 @@ Makefile.PL
 MANIFEST
 README
 t/00.load.t
-t/pod-coverage.t
-t/pod.t
+xt/author/pod-coverage.t
+xt/author/pod.t

@@ -3,22 +3,13 @@ package Parallel::Workers;
 use warnings;
 use strict;
 use Carp;
+use Storable;
+use IO::Handle;
+use IO::Select;
 
-use version; our $VERSION = qv( '0.1' );
-
-sub new {
-    my $class = shift;
-    my $self = bless {}, $class;
-    $self->_initialize( @_ );
-    return $self;
-}
-
-sub _initialize {
-    my $self = shift;
-}
-
-1;
-__END__
+our $VERSION = '0.1.0';
+use base qw( Exporter );
+our @EXPORT_OK = qw( iterate );
 
 =head1 NAME
 
@@ -26,7 +17,7 @@ Parallel::Workers - [One line description of module's purpose here]
 
 =head1 VERSION
 
-This document describes Parallel::Workers version 0.1
+This document describes Parallel::Workers version 0.1.0
 
 =head1 SYNOPSIS
 
@@ -38,9 +29,26 @@ This document describes Parallel::Workers version 0.1
 
 =over
 
-=item C<< new >>
+=item iterate( [ $options ], $worker, $iterator )
 
-Create a new C<< Parallel::Workers >>.
+=cut
+
+{
+    my %DEFAULTS = ( workers => 10, );
+
+    sub iterate {
+        my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
+
+        my $worker = shift;
+        croak "Worker must be a coderef" unless 'CODE' eq ref $worker;
+
+        
+
+    }
+}
+
+1;
+__END__
 
 =back
 
