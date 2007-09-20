@@ -14,10 +14,10 @@ my $build_class = Module::Build->subclass(
 );
 
 my $builder = $build_class->new(
-    module_name       => 'Parallel::Workers',
+    module_name       => 'Parallel::Iterator',
     license           => 'perl',
     dist_author       => 'Andy Armstrong <andy@hexten.net>',
-    dist_version_from => 'lib/Parallel/Workers.pm',
+    dist_version_from => 'lib/Parallel/Iterator.pm',
     requires          => {
         'Test::More' => 0,
         'Storable'   => 0,
@@ -26,7 +26,7 @@ my $builder = $build_class->new(
         'Config'     => 0,
         perl         => '5.8.0',
     },
-    add_to_cleanup => ['Parallel-Workers-*'],
+    add_to_cleanup => ['Parallel-Iterator-*'],
 );
 
 $builder->create_build_script();

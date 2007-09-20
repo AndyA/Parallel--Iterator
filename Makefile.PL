@@ -7,11 +7,11 @@ warn "Optional ExtUtils::MakeMaker::Coverage not available\n" if $@;
 
 WriteMakefile(
     ( MM->can( 'signature_target' ) ? ( SIGN => 1 ) : () ),
-    NAME          => 'Parallel::Workers',
+    NAME          => 'Parallel::Iterator',
     AUTHOR        => 'Andy Armstrong <andy@hexten.net>',
     LICENSE       => 'perl',
-    VERSION_FROM  => 'lib/Parallel/Workers.pm',
-    ABSTRACT_FROM => 'lib/Parallel/Workers.pm',
+    VERSION_FROM  => 'lib/Parallel/Iterator.pm',
+    ABSTRACT_FROM => 'lib/Parallel/Iterator.pm',
     PL_FILES      => {},
     PREREQ_PM     => {
         'Test::More' => 0,
@@ -21,5 +21,5 @@ WriteMakefile(
         'Config'     => 0,
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
-    clean => { FILES    => 'Parallel-Workers-*' },
+    clean => { FILES    => 'Parallel-Iterator-*' },
 );

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use Test::More tests => 10;
-use Parallel::Workers qw( iterate iterate_as_array iterate_as_hash );
+use Parallel::Iterator qw( iterate iterate_as_array iterate_as_hash );
 
 sub array_iter {
     my @ar  = @_;

@@ -1,7 +1,7 @@
 use Test::More tests => 1;
 
 BEGIN {
-    use_ok( 'Parallel::Workers' );
+    use_ok( 'Parallel::Iterator' );
 }
 
-diag( "Testing Parallel::Workers $Parallel::Workers::VERSION" );
+diag( "Testing Parallel::Iterator $Parallel::Iterator::VERSION" );

@@ -9,7 +9,7 @@ use File::Path;
 use PerlIO::gzip;
 use YAML qw<DumpFile LoadFile>;
 use Getopt::Long;
-use Parallel::Workers qw( iterate );
+use Parallel::Iterator qw( iterate );
 
 $| = 1;
 

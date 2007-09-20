@@ -1,4 +1,4 @@
-package Parallel::Workers;
+package Parallel::Iterator;
 
 use warnings;
 use strict;
@@ -18,15 +18,15 @@ my %DEFAULTS = ( workers => ( $Config{d_fork} ? 10 : 0 ) );
 
 =head1 NAME
 
-Parallel::Workers - Simple parallel execution
+Parallel::Iterator - Simple parallel execution
 
 =head1 VERSION
 
-This document describes Parallel::Workers version 0.2.0
+This document describes Parallel::Iterator version 0.2.0
 
 =head1 SYNOPSIS
 
-    use Parallel::Workers qw( iterate );
+    use Parallel::Iterator qw( iterate );
 
     # A very expensive way to double 100 numbers...
     
@@ -141,7 +141,7 @@ array instead:
 
 =head2 Caveats
 
-Process forking is expensive. Only use Parallel::Workers in cases where:
+Process forking is expensive. Only use Parallel::Iterator in cases where:
 
 =over
 
@@ -158,7 +158,7 @@ server or you know it can handle the load.
 
 If the worker is doing an expensive calculation you can parallelise that
 across multiple CPU cores. Benchmark first though. There's a
-considerable overhead associated with Parallel::Workers; unless your
+considerable overhead associated with Parallel::Iterator; unless your
 calculations are time consuming that overhead will dwarf whatever time
 they take.
 
@@ -425,7 +425,7 @@ __END__
 
 =head1 CONFIGURATION AND ENVIRONMENT
   
-Parallel::Workers requires no configuration files or environment variables.
+Parallel::Iterator requires no configuration files or environment variables.
 
 =head1 DEPENDENCIES
 
