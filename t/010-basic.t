@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 8;
+use Test::More tests => 9;
 use Parallel::Workers qw( iterate iterate_as_array iterate_as_hash );
 
 sub array_iter {
