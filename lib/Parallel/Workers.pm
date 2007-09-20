@@ -101,7 +101,6 @@ sub iterate {
             return @{ shift @result_queue } if @result_queue;
 
             if ( $rdr_sel->count || $wtr_sel->count ) {
-                # Got a full set of workers - just need to wait for them
                 my ( $rdr, $wtr, $exc )
                   = IO::Select->select( $rdr_sel, $wtr_sel, undef );
 
