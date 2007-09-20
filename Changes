@@ -1,4 +1,8 @@
-Revision history for Parallel-Workers
+Revision history for Parallel-Iterator
+
+0.2.0   2007-09-20
+        Renamed Parallel-Iterator. Didn't check Parallel-Workers was
+        available. Duh.
 
 0.1.0   2007-09-20
         Initial release.
