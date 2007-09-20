@@ -15,7 +15,10 @@ WriteMakefile(
     PL_FILES      => {},
     PREREQ_PM     => {
         'Test::More' => 0,
-        'version'    => 0,
+        'Storable'   => 0,
+        'IO::Handle' => 0,
+        'IO::Select' => 0,
+        'Config'     => 0,
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES    => 'Parallel-Workers-*' },
