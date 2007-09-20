@@ -3,7 +3,7 @@ package Parallel::Workers;
 use warnings;
 use strict;
 use Carp;
-use Storable;
+use Storable qw( store_fd fd_retrieve );
 use IO::Handle;
 use IO::Select;
 
@@ -40,10 +40,92 @@ This document describes Parallel::Workers version 0.1.0
         my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
 
         my $worker = shift;
-        croak "Worker must be a coderef" unless 'CODE' eq ref $worker;
+        croak "Worker must be a coderef"
+          unless 'CODE' eq ref $worker;
 
-        
+        my $iter = shift;
+        croak "Iterator must be a coderef"
+          unless 'CODE' eq ref $iter;
 
+        croak "Must have at least one worker"
+          if $options{workers} < 1;
+
+        my @workers      = ();
+        my @result_queue = ();
+        my $rdr_sel      = IO::Select->new;
+        my $wtr_sel      = IO::Select->new;
+
+        # Possibly modify the iterator here...
+
+        return sub {
+            # Make new workers
+            if ( @workers < $options{workers} ) {
+
+                # Get something for the worker to start on
+                my @next = $iter->() or return;
+
+                my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
+                  = map IO::Handle->new, 1 .. 4;
+
+                pipe $child_rdr, $my_wtr
+                  or croak "Can't open write pipe ($!)\n";
+
+                pipe $my_rdr, $child_wtr
+                  or croak "Can't open read pipe ($!)\n";
+
+                $rdr_sel->add( $my_rdr );
+                $wtr_sel->add( $my_wtr );
+
+                if ( my $pid = fork ) {
+                    # Parent
+                    push @workers, $pid;
+                    store_fd \@next, $my_wtr;
+                }
+                else {
+                    # Child
+                    my $job_id = undef;
+
+                    {
+                        # Install yield function
+                        no strict 'refs';
+                        my $caller = caller;
+                        *{ $caller . '::yield' } = sub {
+                            store_fd [ $job_id, shift ], $child_wtr;
+                        };
+                    }
+
+                    # Worker loop
+                    while ( defined( my $parcel = fd_retrieve $child_rdr) ) {
+                        last unless defined $parcel->[0];
+                        yield( $worker->( @$parcel ) );
+                    }
+
+                    # End of stream
+                    store_fd undef, $child_rdr;
+                }
+            }
+
+            # Got a full set of workers - just need to wait for them
+            my ( $rdr, $wtr, $exc )
+              = IO::Select->select( $rdr_sel, $wtr_sel, undef );
+
+            # Anybody waiting for work?
+            for my $w ( @$wtr ) {
+                my @next = $iter->();
+                store_fd @next ? \@next : undef, $w;
+            }
+
+            # Anybody got completed work?
+            for my $r ( @$rdr ) {
+                if ( defined( my $results = fd_retrieve $r) ) {
+                    push @result_queue, $results;
+                }
+                else {
+                    $rdr_sel->remove( $r );
+                }
+            }
+            return shift @result_queue;
+        };
     }
 }
 
