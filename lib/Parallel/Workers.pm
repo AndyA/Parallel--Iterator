@@ -49,6 +49,9 @@ sub iterate {
     croak "Must have at least one worker"
       if $options{workers} < 1;
 
+    # TODO: If we kept track of how many outstanding tasks each worker
+    # had we could load balance more effectively.
+
     my @workers      = ();
     my @result_queue = ();
     my $rdr_sel      = IO::Select->new;
