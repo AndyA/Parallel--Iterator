@@ -33,94 +33,105 @@ This document describes Parallel::Workers version 0.1.0
 
 =cut
 
-{
-    my %DEFAULTS = ( workers => 10, );
+my %DEFAULTS = ( workers => 10, );
 
-    sub iterate {
-        my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
+sub iterate {
+    my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
 
-        my $worker = shift;
-        croak "Worker must be a coderef"
-          unless 'CODE' eq ref $worker;
+    my $worker = shift;
+    croak "Worker must be a coderef"
+      unless 'CODE' eq ref $worker;
 
-        my $iter = shift;
-        croak "Iterator must be a coderef"
-          unless 'CODE' eq ref $iter;
+    my $iter = shift;
+    croak "Iterator must be a coderef"
+      unless 'CODE' eq ref $iter;
 
-        croak "Must have at least one worker"
-          if $options{workers} < 1;
+    croak "Must have at least one worker"
+      if $options{workers} < 1;
 
-        my @workers      = ();
-        my @result_queue = ();
-        my $rdr_sel      = IO::Select->new;
-        my $wtr_sel      = IO::Select->new;
+    my @workers      = ();
+    my @result_queue = ();
+    my $rdr_sel      = IO::Select->new;
+    my $wtr_sel      = IO::Select->new;
 
-        # Possibly modify the iterator here...
+    # Possibly modify the iterator here...
 
-        return sub {
-            LOOP: {
-                # Make new workers
-                if ( @workers < $options{workers} && ( my @next = $iter->() ) )
-                {
-                    my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
-                      = map IO::Handle->new, 1 .. 4;
+    return sub {
+        LOOP: {
+            # Make new workers
+            if ( @workers < $options{workers} && ( my @next = $iter->() ) ) {
 
-                    pipe $child_rdr, $my_wtr
-                      or croak "Can't open write pipe ($!)\n";
+                my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
+                  = map IO::Handle->new, 1 .. 4;
 
-                    pipe $my_rdr, $child_wtr
-                      or croak "Can't open read pipe ($!)\n";
+                pipe $child_rdr, $my_wtr
+                  or croak "Can't open write pipe ($!)\n";
 
-                    $rdr_sel->add( $my_rdr );
-                    $wtr_sel->add( $my_wtr );
+                pipe $my_rdr, $child_wtr
+                  or croak "Can't open read pipe ($!)\n";
 
-                    if ( my $pid = fork ) {
-                        # Parent
-                        close $_ for $child_rdr, $child_wtr;
+                $rdr_sel->add( $my_rdr );
+                $wtr_sel->add( $my_wtr );
 
-                        push @workers, $pid;
-                        _put_obj( \@next, $my_wtr );
-                    }
-                    else {
-                        # Child
-                        close $_ for $my_rdr, $my_wtr;
+                if ( my $pid = fork ) {
+                    # Parent
+                    close $_ for $child_rdr, $child_wtr;
 
-                        my $job_id = undef;
-
-                        my $yield = do {
-                            # Install yield function
-                            no strict 'refs';
-                            my $caller = caller;
-                            *{ $caller . '::yield' } = sub {
-                                my $obj = shift;
-                                _put_obj( [ $job_id, $obj ], $child_wtr );
-                            };
-                        };
-
-                        # Worker loop
-                        while ( defined( my $parcel = _get_obj( $child_rdr ) ) )
-                        {
-                            my $result = $worker->( @$parcel );
-                            _put_obj( [ $parcel->[0], $result ], $child_wtr );
-                            # $yield->( $worker->( @$parcel ) );
-                        }
-
-                        # End of stream
-                        _put_obj( undef, $child_wtr );
-
-                        close $_ for $child_rdr, $child_wtr;
-                        exit;
-                    }
+                    push @workers, $pid;
+                    _put_obj( \@next, $my_wtr );
                 }
+                else {
+                    # Child
+                    close $_ for $my_rdr, $my_wtr;
 
-                unless ( $rdr_sel->count || $wtr_sel->count ) {
-                    close $_ for $rdr_sel->handles, $wtr_sel->handles;
-                    return;
+                    # my $job_id = undef;
+                    #
+                    # my $yield = do {
+                    #     # Install yield function
+                    #     no strict 'refs';
+                    #     my $caller = caller;
+                    #     *{ $caller . '::yield' } = sub {
+                    #         my $obj = shift;
+                    #         _put_obj( [ $job_id, $obj ], $child_wtr );
+                    #     };
+                    # };
+
+                    my $done = 0;
+
+                    # Worker loop
+                    while ( defined( my $parcel = _get_obj( $child_rdr ) ) ) {
+                        my $result = $worker->( @$parcel );
+                        # $done++;
+                        # warn "# $$ done $done\n";
+                        _put_obj( [ $parcel->[0], $result ], $child_wtr );
+                        # $yield->( $worker->( @$parcel ) );
+                    }
+
+                    # End of stream
+                    _put_obj( undef, $child_wtr );
+
+                    close $_ for $child_rdr, $child_wtr;
+                    exit;
                 }
+            }
 
+            return @{ shift @result_queue } if @result_queue;
+
+            if ( $rdr_sel->count || $wtr_sel->count ) {
                 # Got a full set of workers - just need to wait for them
                 my ( $rdr, $wtr, $exc )
                   = IO::Select->select( $rdr_sel, $wtr_sel, undef );
+
+                # Anybody got completed work?
+                for my $r ( @$rdr ) {
+                    if ( defined( my $results = _get_obj( $r ) ) ) {
+                        push @result_queue, $results;
+                    }
+                    else {
+                        $rdr_sel->remove( $r );
+                        close $r;
+                    }
+                }
 
                 # Anybody waiting for work?
                 for my $w ( @$wtr ) {
@@ -130,25 +141,16 @@ This document describes Parallel::Workers version 0.1.0
                     else {
                         _put_obj( undef, $w );
                         $wtr_sel->remove( $w );
+                        close $w;
                     }
                 }
-
-                # Anybody got completed work?
-                for my $r ( @$rdr ) {
-                    if ( defined( my $results = _get_obj( $r ) ) ) {
-                        push @result_queue, $results;
-                    }
-                    else {
-                        $rdr_sel->remove( $r );
-                    }
-                }
-
-                return @{ shift @result_queue } if @result_queue;
-
                 redo LOOP;
             }
-        };
-    }
+
+            waitpid( $_, 0 ) for @workers;
+            return;
+        }
+    };
 }
 
 sub _get_obj {
