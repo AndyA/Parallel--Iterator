@@ -84,27 +84,10 @@ sub iterate {
                     # Child
                     close $_ for $my_rdr, $my_wtr;
 
-                    # my $job_id = undef;
-                    #
-                    # my $yield = do {
-                    #     # Install yield function
-                    #     no strict 'refs';
-                    #     my $caller = caller;
-                    #     *{ $caller . '::yield' } = sub {
-                    #         my $obj = shift;
-                    #         _put_obj( [ $job_id, $obj ], $child_wtr );
-                    #     };
-                    # };
-
-                    my $done = 0;
-
                     # Worker loop
                     while ( defined( my $parcel = _get_obj( $child_rdr ) ) ) {
                         my $result = $worker->( @$parcel );
-                        # $done++;
-                        # warn "# $$ done $done\n";
                         _put_obj( [ $parcel->[0], $result ], $child_wtr );
-                        # $yield->( $worker->( @$parcel ) );
                     }
 
                     # End of stream
