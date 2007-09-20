@@ -36,6 +36,7 @@ for my $workers ( 1, 2, 10 ) {
         { workers => $workers },
         sub {
             my ( $id, $job ) = @_;
+            sleep 1;
             return $job * 2;
         },
         array_iter( 1, 2, 3, 4, 5 )
