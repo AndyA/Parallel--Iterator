@@ -105,7 +105,7 @@ Get an iterator for the list of URLs:
 
     my $url_iter = list_iter( @urls );
 
-Then get another iterator which will return the transformed results:
+Then wrap it in another iterator which will return the transformed results:
 
     my $page_iter = iterate( \&fetch, $url_iter );
 
@@ -267,23 +267,16 @@ sub iterate {
         };
     }
     else {
-
-        # TODO: If we kept track of how many outstanding tasks each worker
-        # had we could load balance more effectively.
-
         my @workers      = ();
         my @result_queue = ();
         my $rdr_sel      = IO::Select->new;
         my $wtr_sel      = IO::Select->new;
-
-        # Possibly modify the iterator here...
 
         return sub {
             LOOP: {
                 # Make new workers
                 if ( @workers < $options{workers} && ( my @next = $iter->() ) )
                 {
-
                     my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
                       = map IO::Handle->new, 1 .. 4;
 
@@ -308,10 +301,9 @@ sub iterate {
                         close $_ for $my_rdr, $my_wtr;
 
                         # Worker loop
-                        while ( defined( my $parcel = _get_obj( $child_rdr ) ) )
-                        {
-                            my $result = $worker->( @$parcel );
-                            _put_obj( [ $parcel->[0], $result ], $child_wtr );
+                        while ( defined( my $job = _get_obj( $child_rdr ) ) ) {
+                            my $result = $worker->( @$job );
+                            _put_obj( [ $job->[0], $result ], $child_wtr );
                         }
 
                         # End of stream
@@ -414,6 +406,7 @@ sub _get_obj {
     return $r->[0];
 }
 
+# TODO: This blocks if we send enough data. And then we deadlock.
 sub _put_obj {
     my ( $obj, $fd ) = @_;
     store_fd [$obj], $fd;
