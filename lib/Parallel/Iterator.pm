@@ -1,5 +1,7 @@
 package Parallel::Iterator;
 
+# $Id$
+
 use warnings;
 use strict;
 use Carp;
@@ -318,12 +320,11 @@ sub iterate {
                     pipe $my_rdr, $child_wtr
                       or croak "Can't open read pipe ($!)\n";
 
-                    $select->add( [ $my_rdr, $my_wtr, 0, 'hello' ] );
+                    $select->add( [ $my_rdr, $my_wtr, 0 ] );
 
                     if ( my $pid = fork ) {
                         # Parent
                         close $_ for $child_rdr, $child_wtr;
-
                         push @workers, $pid;
                         _put_obj( \@next, $my_wtr );
                     }
@@ -347,7 +348,6 @@ sub iterate {
 
                         # End of stream
                         _put_obj( undef, $child_wtr );
-
                         close $_ for $child_rdr, $child_wtr;
                         exit;
                     }
@@ -380,7 +380,6 @@ sub iterate {
                                         _put_obj( undef, $wh );
                                         close $wh;
                                         @{$r}[ 1, 2 ] = ( undef, 1 );
-
                                     }
                                 }
                             }
@@ -393,9 +392,7 @@ sub iterate {
 
                     if ( my $err = $@ ) {
                         # Finish all the workers
-                        for my $h ( $select->handles ) {
-                            _put_obj( undef, $h->[1] );
-                        }
+                        _put_obj( undef, $_->[1] ) for $select->handles;
 
                         # And wait for them to exit
                         waitpid( $_, 0 ) for @workers;

@@ -1,5 +1,10 @@
 Revision history for Parallel-Iterator
 
+0.3.0   2007-10-02
+        Made job output and result collection run in sync. Formally job
+        output from the master process ran as quickly as possible.
+        Added support for iterators throwing errors.
+
 0.2.0   2007-09-20
         Renamed Parallel-Iterator. Didn't check Parallel-Workers was
         available. Duh.
