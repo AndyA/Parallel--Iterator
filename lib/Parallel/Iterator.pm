@@ -274,7 +274,6 @@ sub iterate {
         my @workers      = ();
         my @result_queue = ();
         my $rdr_sel      = IO::Select->new;
-        my $wtr_sel      = IO::Select->new;
 
         # Possibly modify the iterator here...
 
@@ -293,8 +292,7 @@ sub iterate {
                     pipe $my_rdr, $child_wtr
                       or croak "Can't open read pipe ($!)\n";
 
-                    $rdr_sel->add( $my_rdr );
-                    $wtr_sel->add( $my_wtr );
+                    $rdr_sel->add( [ $my_rdr, $my_wtr, 0, 'hello' ] );
 
                     if ( my $pid = fork ) {
                         # Parent
@@ -323,32 +321,32 @@ sub iterate {
 
                 return @{ shift @result_queue } if @result_queue;
 
-                if ( $rdr_sel->count || $wtr_sel->count ) {
-                    my ( $rdr, $wtr, $exc )
-                      = IO::Select->select( $rdr_sel, $wtr_sel, undef );
+                if ( $rdr_sel->count ) {
+                    my @rdr = $rdr_sel->can_read;
 
                     # Anybody got completed work?
-                    for my $r ( @$rdr ) {
-                        if ( defined( my $results = _get_obj( $r ) ) ) {
+                    for my $r ( @rdr ) {
+                        my ( $rh, $wh, $eof ) = @$r;
+                        if ( defined( my $results = _get_obj( $rh ) ) ) {
                             push @result_queue, $results;
+                            unless ( $eof ) {
+                                if ( my @next = $iter->() ) {
+                                    _put_obj( \@next, $wh );
+                                }
+                                else {
+                                    _put_obj( undef, $wh );
+                                    close $wh;
+                                    @{$r}[ 1, 2 ] = ( undef, 1 );
+
+                                }
+                            }
                         }
                         else {
                             $rdr_sel->remove( $r );
-                            close $r;
+                            close $rh;
                         }
                     }
 
-                    # Anybody waiting for work?
-                    for my $w ( @$wtr ) {
-                        if ( my @next = $iter->() ) {
-                            _put_obj( \@next, $w );
-                        }
-                        else {
-                            _put_obj( undef, $w );
-                            $wtr_sel->remove( $w );
-                            close $w;
-                        }
-                    }
                     redo LOOP;
                 }
 
