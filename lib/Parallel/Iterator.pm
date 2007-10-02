@@ -14,7 +14,10 @@ our $VERSION = '0.3.0';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
-my %DEFAULTS = ( workers => ( $Config{d_fork} ? 10 : 0 ) );
+my %DEFAULTS = (
+    workers => ( $Config{d_fork} ? 10 : 0 ),
+    onerror => 'die',
+);
 
 =head1 NAME
 
@@ -212,6 +215,22 @@ The number of concurrent processes to launch. Set this to 0 to disable
 forking. Defaults to 10 on systems that support fork and 0 (disable
 forking) on those that do not.
 
+=item C<onerror>
+
+The action to take when an error is thrown in the iterator. Possible
+values are 'die', 'warn' or a reference to a subroutine that will be
+called with the index of the job that threw the exception and the value
+of C<$@> thrown.
+
+    iterate( {
+        onerror => sub {
+            my ($id, $err) = @_;
+            $self->log( "Error for index $id: $err" );
+        },
+        $worker,
+        \@jobs
+    );
+
 =back
 
 =cut
@@ -250,6 +269,13 @@ sub iterate {
         croak "Iterator must be a code, array or hash ref";
     }
 
+    if ( $options{onerror} =~ /^(die|warn)$/ ) {
+        $options{onerror} = eval "sub { shift; $1 shift }";
+    }
+
+    croak "onerror option must be 'die', 'warn' or a code reference"
+      unless 'CODE' eq ref $options{onerror};
+
     if ( $options{workers} > 0 && $DEFAULTS{workers} == 0 ) {
         warn "Fork not available, falling back to single process mode\n";
         $options{workers} = 0;
@@ -273,7 +299,7 @@ sub iterate {
 
         my @workers      = ();
         my @result_queue = ();
-        my $rdr_sel      = IO::Select->new;
+        my $select       = IO::Select->new;
 
         # Possibly modify the iterator here...
 
@@ -292,7 +318,7 @@ sub iterate {
                     pipe $my_rdr, $child_wtr
                       or croak "Can't open read pipe ($!)\n";
 
-                    $rdr_sel->add( [ $my_rdr, $my_wtr, 0, 'hello' ] );
+                    $select->add( [ $my_rdr, $my_wtr, 0, 'hello' ] );
 
                     if ( my $pid = fork ) {
                         # Parent
@@ -307,8 +333,16 @@ sub iterate {
 
                         # Worker loop
                         while ( defined( my $job = _get_obj( $child_rdr ) ) ) {
-                            my $result = $worker->( @$job );
-                            _put_obj( [ $job->[0], $result ], $child_wtr );
+                            my $result = eval { $worker->( @$job ) };
+                            my $err = $@;
+                            _put_obj(
+                                [
+                                    $err
+                                    ? ( 'E', $job->[0], $err )
+                                    : ( 'R', $job->[0], $result )
+                                ],
+                                $child_wtr
+                            );
                         }
 
                         # End of stream
@@ -320,36 +354,58 @@ sub iterate {
                 }
 
                 return @{ shift @result_queue } if @result_queue;
-
-                if ( $rdr_sel->count ) {
-                    my @rdr = $rdr_sel->can_read;
-
-                    # Anybody got completed work?
-                    for my $r ( @rdr ) {
-                        my ( $rh, $wh, $eof ) = @$r;
-                        if ( defined( my $results = _get_obj( $rh ) ) ) {
-                            push @result_queue, $results;
-                            unless ( $eof ) {
-                                if ( my @next = $iter->() ) {
-                                    _put_obj( \@next, $wh );
+                if ( $select->count ) {
+                    eval {
+                        my @rdr = $select->can_read;
+                        # Anybody got completed work?
+                        for my $r ( @rdr ) {
+                            my ( $rh, $wh, $eof ) = @$r;
+                            if ( defined( my $results = _get_obj( $rh ) ) ) {
+                                my $type = shift @$results;
+                                if ( $type eq 'R' ) {
+                                    push @result_queue, $results;
+                                }
+                                elsif ( $type eq 'E' ) {
+                                    $options{onerror}->( @$results );
                                 }
                                 else {
-                                    _put_obj( undef, $wh );
-                                    close $wh;
-                                    @{$r}[ 1, 2 ] = ( undef, 1 );
+                                    die "Bad result type: $type";
+                                }
 
+                                unless ( $eof ) {
+                                    if ( my @next = $iter->() ) {
+                                        _put_obj( \@next, $wh );
+                                    }
+                                    else {
+                                        _put_obj( undef, $wh );
+                                        close $wh;
+                                        @{$r}[ 1, 2 ] = ( undef, 1 );
+
+                                    }
                                 }
                             }
+                            else {
+                                $select->remove( $r );
+                                close $rh;
+                            }
                         }
-                        else {
-                            $rdr_sel->remove( $r );
-                            close $rh;
+                    };
+
+                    if ( my $err = $@ ) {
+                        # Finish all the workers
+                        for my $h ( $select->handles ) {
+                            _put_obj( undef, $h->[1] );
                         }
+
+                        # And wait for them to exit
+                        waitpid( $_, 0 ) for @workers;
+
+                        # Rethrow
+                        die $err;
                     }
 
                     redo LOOP;
                 }
-
                 waitpid( $_, 0 ) for @workers;
                 return;
             }

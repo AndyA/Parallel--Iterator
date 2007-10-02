@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 10;
+use Test::More tests => 13;
 use Parallel::Iterator qw( iterate iterate_as_array iterate_as_hash );
 
 sub array_iter {
@@ -136,4 +136,61 @@ for my $workers ( 0, 1, 2, 10 ) {
     );
 
     is_deeply \@got, \@input, "array iterator";
+}
+
+# Die
+{
+    my @input = ( 1 .. 5 );
+    my $iter  = iterate(
+        { workers => 1 },
+        sub {
+            my ( $id, $job ) = @_;
+            die "Oops";
+        },
+        \@input
+    );
+
+    eval { $iter->() };
+    like $@, qr{Oops}, "died OK";
+}
+
+# Warn
+{
+    my @input = ( 1 .. 5 );
+    my $iter  = iterate(
+        { workers => 1, onerror => 'warn' },
+        sub {
+            my ( $id, $job ) = @_;
+            die "Oops";
+        },
+        \@input
+    );
+
+    my @warning;
+    local $SIG{__WARN__} = sub {
+        push @warning, @_;
+    };
+
+    $iter->();
+    like $warning[0], qr{Oops}, "warned OK";
+}
+
+# Callback
+{
+    my @input = ( 1 .. 5 );
+    my @warning;
+    my $iter = iterate(
+        {
+            workers => 1,
+            onerror => sub { push @warning, @_ }
+        },
+        sub {
+            my ( $id, $job ) = @_;
+            die "Oops";
+        },
+        \@input
+    );
+
+    $iter->();
+    like $warning[1], qr{Oops}, "warned OK";
 }
