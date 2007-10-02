@@ -1,6 +1,5 @@
-package Parallel::Iterator;
-
 # $Id$
+package Parallel::Iterator;
 
 use warnings;
 use strict;
