@@ -1,3 +1,4 @@
+# $Id: Iterator.pm 2666 2007-10-02 22:04:36Z andy $
 use strict;
 use warnings;
 use Module::Build;
