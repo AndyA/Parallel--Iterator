@@ -18,6 +18,7 @@ our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 my %DEFAULTS = (
     workers => ( $Config{d_fork} ? 10 : 0 ),
     onerror => 'die',
+    nowarn  => 0,
 );
 
 =head1 NAME
@@ -231,6 +232,12 @@ of C<$@> thrown.
         $worker,
         \@jobs
     );
+    
+=item C<nowarn>
+
+Normally C<iterate> will issue a warning on systems on which fork is not
+available and fall back to single process mode. This option supresses
+that warning.
 
 =back
 
@@ -278,28 +285,29 @@ sub iterate {
       unless 'CODE' eq ref $options{onerror};
 
     if ( $options{workers} > 0 && $DEFAULTS{workers} == 0 ) {
-	# TODO: Add nowarn option.
-        warn "Fork not available, falling back to single process mode\n";
+        # TODO: Add nowarn option.
+        warn "Fork not available, falling back to single process mode\n"
+          unless $options{nowarn};
         $options{workers} = 0;
     }
 
     if ( $options{workers} == 0 ) {
         # Non-forking version
         return sub {
-            while (1) {		
-		if ( my @next = $iter->() ) {
-		    my $result = eval { $worker->( @next ) };
-		    if ( my $err = $@ ) {
-			$options{onerror}->( $next[0], $err );
-		    }
-		    else {
-			return ( $next[0], $result  ); 
-		    }
-		}
-		else {
-		    return;
-		}
-    	    }
+            while ( 1 ) {
+                if ( my @next = $iter->() ) {
+                    my $result = eval { $worker->( @next ) };
+                    if ( my $err = $@ ) {
+                        $options{onerror}->( $next[0], $err );
+                    }
+                    else {
+                        return ( $next[0], $result );
+                    }
+                }
+                else {
+                    return;
+                }
+            }
         };
     }
     else {

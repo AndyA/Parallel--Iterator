@@ -38,7 +38,10 @@ for my $workers ( 0, 1, 2, 10 ) {
     my @double      = map $_ * 2, @nums;
     my $done        = 0;
     my $double_iter = iterate(
-        { workers => $workers },
+        {
+            workers => $workers,
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             return $job * 2;
@@ -55,7 +58,10 @@ for my $workers ( 0, 1, 2, 10 ) {
     my @input     = ( 1 .. 5 );
     my @quad      = map $_ * 4, @input;
     my $quad_iter = iterate(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             return $job * 4;
@@ -72,7 +78,10 @@ for my $workers ( 0, 1, 2, 10 ) {
     my @input = ( 1 .. 5 );
     my @quad  = map $_ * 4, @input;
     my @got   = iterate_as_array(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             return $job * 4;
@@ -85,9 +94,18 @@ for my $workers ( 0, 1, 2, 10 ) {
 
 # Hash iterator
 {
-    my %input = ( one => 1, three => 3, five => 5, seven => 7, nine => 9 );
+    my %input = (
+        one   => 1,
+        three => 3,
+        five  => 5,
+        seven => 7,
+        nine  => 9
+    );
     my $treble_iter = iterate(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $key, $job ) = @_;
             return $job * 3;
@@ -108,9 +126,18 @@ for my $workers ( 0, 1, 2, 10 ) {
 
 # iterate_as_hash
 {
-    my %input = ( one => 1, three => 3, five => 5, seven => 7, nine => 9 );
+    my %input = (
+        one   => 1,
+        three => 3,
+        five  => 5,
+        seven => 7,
+        nine  => 9
+    );
     my %output = iterate_as_hash(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $key, $job ) = @_;
             return $job * 3;
@@ -128,7 +155,10 @@ for my $workers ( 0, 1, 2, 10 ) {
 {
     my @input = ();
     my @got   = iterate_as_array(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             return $job * 5;
@@ -143,7 +173,10 @@ for my $workers ( 0, 1, 2, 10 ) {
 {
     my @input = ( 1 .. 5 );
     my $iter  = iterate(
-        { workers => 1 },
+        {
+            workers => 1,
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             die "Oops";
@@ -159,7 +192,11 @@ for my $workers ( 0, 1, 2, 10 ) {
 {
     my @input = ( 1 .. 5 );
     my $iter  = iterate(
-        { workers => 1, onerror => 'warn' },
+        {
+            workers => 1,
+            onerror => 'warn',
+            nowarn  => 1
+        },
         sub {
             my ( $id, $job ) = @_;
             die "Oops";
@@ -183,7 +220,8 @@ for my $workers ( 0, 1, 2, 10 ) {
     my $iter = iterate(
         {
             workers => 1,
-            onerror => sub { push @warning, @_ }
+            onerror => sub { push @warning, @_ },
+            nowarn  => 1
         },
         sub {
             my ( $id, $job ) = @_;
