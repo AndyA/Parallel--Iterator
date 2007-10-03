@@ -2,13 +2,12 @@ use strict;
 use warnings;
 use IO::Handle;
 use POSIX qw(:errno_h);
-use Test::More skip_all => 'Would block';
-# use Test::More tests => 1;
+use Test::More tests => 1;
 use Parallel::Iterator qw( iterate_as_array );
 
 my $buffer_size = get_pipe_buffer_size();
 
-diag "I/O buffer size: $buffer_size\n";
+# diag "I/O buffer size: $buffer_size\n";
 
 {
     # Random data
