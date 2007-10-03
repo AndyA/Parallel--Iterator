@@ -8,14 +8,14 @@ use Parallel::Iterator qw( iterate_as_array );
 
 my $buffer_size = get_pipe_buffer_size();
 plan 'skip_all' => "Can't calculate buffer size"
-	unless defined $buffer_size;
+  unless defined $buffer_size;
 plan tests => 1;
 
 # diag "I/O buffer size: $buffer_size\n";
 
 {
     # Random data
-    my $data = join '', map chr rand 256, (1 .. $buffer_size * 2);
+    my $data = join '', map chr rand 256, ( 1 .. $buffer_size * 2 );
 
     # Just in case someone decides to generate data by some other
     # means...
@@ -45,7 +45,7 @@ plan tests => 1;
     }
 
     my @got = iterate_as_array(
-        { workers => 5 },
+        { workers => 5, nowarn => 1 },
         sub {
             my ( $id, $job ) = @_;
             if ( ref $job ) {
@@ -72,13 +72,13 @@ sub get_pipe_buffer_size {
     my ( $in, $out ) = map IO::Handle->new, 1 .. 2;
 
     unless ( pipe $in, $out ) {
-	diag "Can't make pipe ($!)\n";
-	return;
+        diag "Can't make pipe ($!)\n";
+        return;
     }
 
     unless ( defined $out->blocking( 0 ) ) {
-	diag "Can't turn off blocking ($!)\n";
-	return;
+        diag "Can't turn off blocking ($!)\n";
+        return;
     }
 
     my $chunk = ' ' x ( 1024 * 4 );
