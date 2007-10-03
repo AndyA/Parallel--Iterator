@@ -278,6 +278,7 @@ sub iterate {
       unless 'CODE' eq ref $options{onerror};
 
     if ( $options{workers} > 0 && $DEFAULTS{workers} == 0 ) {
+	# TODO: Add nowarn option.
         warn "Fork not available, falling back to single process mode\n";
         $options{workers} = 0;
     }
@@ -285,12 +286,20 @@ sub iterate {
     if ( $options{workers} == 0 ) {
         # Non-forking version
         return sub {
-            if ( my @next = $iter->() ) {
-                return ( $next[0], $worker->( @next ) );
-            }
-            else {
-                return;
-            }
+            while (1) {		
+		if ( my @next = $iter->() ) {
+		    my $result = eval { $worker->( @next ) };
+		    if ( my $err = $@ ) {
+			$options{onerror}->( $next[0], $err );
+		    }
+		    else {
+			return ( $next[0], $result  ); 
+		    }
+		}
+		else {
+		    return;
+		}
+    	    }
         };
     }
     else {

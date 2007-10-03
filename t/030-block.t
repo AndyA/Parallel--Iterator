@@ -3,10 +3,13 @@ use strict;
 use warnings;
 use IO::Handle;
 use POSIX qw(:errno_h);
-use Test::More tests => 1;
+use Test::More;
 use Parallel::Iterator qw( iterate_as_array );
 
 my $buffer_size = get_pipe_buffer_size();
+plan 'skip_all' => "Can't calculate buffer size"
+	unless defined $buffer_size;
+plan tests => 1;
 
 # diag "I/O buffer size: $buffer_size\n";
 
@@ -68,9 +71,15 @@ my $buffer_size = get_pipe_buffer_size();
 sub get_pipe_buffer_size {
     my ( $in, $out ) = map IO::Handle->new, 1 .. 2;
 
-    pipe $in, $out or die "Can't make pipe ($!)\n";
+    unless ( pipe $in, $out ) {
+	diag "Can't make pipe ($!)\n";
+	return;
+    }
 
-    defined $out->blocking( 0 ) or die "Can't turn off blocking ($!)\n";
+    unless ( defined $out->blocking( 0 ) ) {
+	diag "Can't turn off blocking ($!)\n";
+	return;
+    }
 
     my $chunk = ' ' x ( 1024 * 4 );
     my $wrote = 0;
