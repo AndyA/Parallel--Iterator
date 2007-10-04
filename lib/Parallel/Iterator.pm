@@ -19,9 +19,10 @@ use constant IS_WIN32 => ( $^O =~ /^(MS)?Win32$/ );
 
 my %DEFAULTS = (
     workers => ( ( $Config{d_fork} && !IS_WIN32 ) ? 10 : 0 ),
-    onerror => 'die',
-    nowarn  => 0,
-    batch   => 1,
+    onerror  => 'die',
+    nowarn   => 0,
+    batch    => 1,
+    adaptive => 0,
 );
 
 =head1 NAME
@@ -253,7 +254,7 @@ parent use something like this to guard against multiple execution:
 
 =head1 INTERFACE 
 
-=head2 C<< iterate( [ $options ], $trans, $iterator ) >>
+=head2 C<< iterate( [ $options ], $worker, $iterator ) >>
 
 Get an iterator that applies the supplied transformation function to
 each value returned by the input iterator.
@@ -277,6 +278,40 @@ The number of concurrent processes to launch. Set this to 0 to disable
 forking. Defaults to 10 on systems that support fork and 0 (disable
 forking) on those that do not.
 
+=item C<nowarn>
+
+Normally C<iterate> will issue a warning on systems on which fork is not
+available and fall back to single process mode. This option supresses
+that warning.
+
+=item C<batch>
+
+Ordinarily items are passed to the worker one at a time. If you are
+processing a large number of items it may be more efficient to process
+them in batches. Specify the batch size using this option.
+
+=item C<adaptive>
+
+Extending the idea of batching a number of work items to amortize the
+overhead of passing work to and from parallel workers you may also ask
+C<iterate> to heuristically determine the batch size by setting the
+C<adaptive> option to a numeric value.
+
+The batch size will be computed as
+
+    <number of items seen> / <number of workers> / <adaptive>
+
+A larger value for C<adaptive> will reduce the rate at which the batch
+size increases. Good values tend to be in the range 1 to 2.
+
+You can also specify lower and, optionally, upper bounds on the batch
+size by passing an reference to an array containing ( lower bound,
+growth ratio, upper bound ). The upper bound may be omitted.
+
+    my $iter = iterate(
+        { adaptive => [ 5, 2, 100 ] },
+        $worker, \@stuff );
+
 =item C<onerror>
 
 The action to take when an error is thrown in the iterator. Possible
@@ -292,22 +327,9 @@ of C<$@> thrown.
         $worker,
         \@jobs
     );
+
+The default is 'die'.
     
-=item C<batch>
-
-Ordinarily items are passed to the worker one at a time. If you are
-processing a large number of items it may be more efficient to process
-them in batches. Specify the batch size using this option.
-
-Batching is transparent. Internally the iterators and worker are
-modified to batch and unbatch items.
-    
-=item C<nowarn>
-
-Normally C<iterate> will issue a warning on systems on which fork is not
-available and fall back to single process mode. This option supresses
-that warning.
-
 =back
 
 =cut
@@ -480,15 +502,45 @@ sub _fork {
 }
 
 sub _batch_input_iter {
-    my ( $code, $batch ) = @_;
+    my ( $code, $options ) = @_;
 
-    return sub {
-        my @chunk = ();
-        while ( @chunk < $batch && ( my @next = $code->() ) ) {
-            push @chunk, \@next;
-        }
-        return @chunk ? ( 0, \@chunk ) : ();
-    };
+    if ( my $adapt = $options->{adaptive} ) {
+        my $workers = $options->{workers} || 1;
+        my $count = 0;
+
+        $adapt = [ 1, $adapt, undef ]
+          unless 'ARRAY' eq ref $adapt;
+
+        my ( $min, $ratio, $max ) = @$adapt;
+        $min = 1 unless defined $min && $min > 1;
+
+        return sub {
+            my @chunk = ();
+
+            # Adapt batch size
+            my $batch = $count / $workers / $ratio;
+            $batch = $min if $batch < $min;
+            $batch = $max if defined $max && $batch > $max;
+
+            while ( @chunk < $batch && ( my @next = $code->() ) ) {
+                push @chunk, \@next;
+                $count++;
+            }
+
+            return @chunk ? ( 0, \@chunk ) : ();
+        };
+    }
+    else {
+        my $batch = $options->{batch};
+
+        return sub {
+            my @chunk = ();
+            while ( @chunk < $batch && ( my @next = $code->() ) ) {
+                push @chunk, \@next;
+            }
+            return @chunk ? ( 0, \@chunk ) : ();
+        };
+    }
 }
 
 sub _batch_output_iter {
@@ -549,12 +601,12 @@ sub iterate {
 
     my $factory = $options{workers} == 0 ? \&_nonfork : \&_fork;
 
-    if ( $options{batch} > 1 ) {
+    if ( $options{batch} > 1 || $options{adaptive} ) {
         return _batch_output_iter(
             $factory->(
                 \%options,
                 _batch_worker( $worker ),
-                _batch_input_iter( $iter, $options{batch} )
+                _batch_input_iter( $iter, \%options )
             )
         );
     }
