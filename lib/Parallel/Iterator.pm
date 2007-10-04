@@ -388,6 +388,12 @@ sub _nonfork {
     };
 }
 
+sub _rotate {
+    my $amount = shift() % @_;
+    my @l = splice @_, 0, $amount;
+    return ( @_, @l );
+}
+
 # Does this sub look a bit long to you? :)
 sub _fork {
     my ( $options, $worker, $iter ) = @_;
@@ -395,11 +401,13 @@ sub _fork {
     my @workers      = ();
     my @result_queue = ();
     my $select       = IO::Select->new;
+    my $rotate       = 0;
 
     return sub {
         LOOP: {
             # Make new workers
-            if ( @workers < $options->{workers} && ( my @next = $iter->() ) ) {
+            while ( @workers < $options->{workers} && ( my @next = $iter->() ) )
+            {
 
                 my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
                   = map IO::Handle->new, 1 .. 4;
@@ -445,6 +453,7 @@ sub _fork {
             return @{ shift @result_queue } if @result_queue;
             if ( $select->count ) {
                 eval {
+                    # my @rdr = _rotate( $rotate++, $select->can_read );
                     my @rdr = $select->can_read;
                     # Anybody got completed work?
                     for my $r ( @rdr ) {

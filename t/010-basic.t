@@ -1,7 +1,7 @@
 # $Id$
 use strict;
 use warnings;
-use Test::More tests => 13;
+use Test::More tests => 19;
 use Parallel::Iterator qw( iterate iterate_as_array iterate_as_hash );
 
 sub array_iter {
@@ -31,6 +31,23 @@ sub fill_array_from_iter {
     my $iter = array_iter( @ar );
     my @got  = fill_array_from_iter( $iter );
     is_deeply \@got, \@ar, 'iterators';
+}
+
+# _rotate
+{
+    for my $rot ( 0 .. 5 ) {
+        my @in = ( 1 .. 4 );
+        # Rotate manually - otherwise we'd just be duping the algo
+        # _rotate uses.
+        my @want = @in;
+        for ( my $i = 0; $i < $rot; $i++ ) {
+            my $first = shift @want;
+            push @want, $first;
+        }
+
+        my @got = Parallel::Iterator::_rotate( $rot, @in );
+        is_deeply \@got, \@want, "rotate $rot OK";
+    }
 }
 
 for my $workers ( 0, 1, 2, 10 ) {
