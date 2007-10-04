@@ -1,6 +1,6 @@
 ---
 name: Parallel-Iterator
-version: 0.5.0
+version: 0.6.0
 author:
   - 'Andy Armstrong <andy@hexten.net>'
 abstract: Simple parallel execution
@@ -17,7 +17,7 @@ requires:
 provides:
   Parallel::Iterator:
     file: lib/Parallel/Iterator.pm
-    version: 0.5.0
+    version: 0.6.0
 generated_by: Module::Build version 0.2808
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html
