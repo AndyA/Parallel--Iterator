@@ -4,7 +4,7 @@ package Parallel::Iterator;
 use warnings;
 use strict;
 use Carp;
-use Storable qw( store_fd fd_retrieve );
+use Storable qw( store_fd fd_retrieve dclone );
 use IO::Handle;
 use IO::Select;
 use Config;
@@ -285,7 +285,6 @@ sub iterate {
       unless 'CODE' eq ref $options{onerror};
 
     if ( $options{workers} > 0 && $DEFAULTS{workers} == 0 ) {
-        # TODO: Add nowarn option.
         warn "Fork not available, falling back to single process mode\n"
           unless $options{nowarn};
         $options{workers} = 0;
@@ -296,7 +295,9 @@ sub iterate {
         return sub {
             while ( 1 ) {
                 if ( my @next = $iter->() ) {
-                    my $result = eval { $worker->( @next ) };
+                    my ( $id, $work ) = @next;
+                    $work = dclone $work if defined $work && ref $work;
+                    my $result = eval { $worker->( $id, $work ) };
                     if ( my $err = $@ ) {
                         $options{onerror}->( $next[0], $err );
                     }

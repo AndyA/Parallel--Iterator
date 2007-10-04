@@ -233,3 +233,5 @@ for my $workers ( 0, 1, 2, 10 ) {
     $iter->();
     like $warning[1], qr{Oops}, "warned OK";
 }
+
+1;

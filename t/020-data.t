@@ -45,3 +45,5 @@ use Parallel::Iterator qw( iterate_as_array );
 
     is_deeply \@got, \@want, "data structure";
 }
+
+1;

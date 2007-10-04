@@ -9,6 +9,7 @@ use Parallel::Iterator qw( iterate_as_array );
 my $buffer_size = get_pipe_buffer_size();
 plan 'skip_all' => "Can't calculate buffer size"
   unless defined $buffer_size;
+
 plan tests => 1;
 
 # diag "I/O buffer size: $buffer_size\n";
@@ -48,6 +49,7 @@ plan tests => 1;
         { workers => 5, nowarn => 1 },
         sub {
             my ( $id, $job ) = @_;
+            # Just munge the data in a predictable, detectable way...
             if ( ref $job ) {
                 if ( 'HASH' eq ref $job ) {
                     $job->{value} .= '!';
@@ -96,3 +98,4 @@ sub get_pipe_buffer_size {
     return $wrote;
 }
 
+1;
