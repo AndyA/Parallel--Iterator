@@ -200,14 +200,6 @@ sub make_name {
     return File::Spec->catfile( OUTPUT, "$email.$ext" );
 }
 
-sub get_default_icon {
-    if ( my ( $data, $type ) = get_icon( 'some.made.up@name.hexten.net' ) ) {
-        return $data;
-    }
-
-    die "Can't fetch default icon\n";
-}
-
 sub get_icon {
     my $id = shift;
     $id =~ s{^(((.).).*)$}{$3/$2/$1};
