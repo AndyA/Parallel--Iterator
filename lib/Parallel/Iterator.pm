@@ -21,6 +21,7 @@ my %DEFAULTS = (
     workers => ( ( $Config{d_fork} && !IS_WIN32 ) ? 10 : 0 ),
     onerror => 'die',
     nowarn  => 0,
+    batch   => 1,
 );
 
 =head1 NAME
@@ -292,6 +293,15 @@ of C<$@> thrown.
         \@jobs
     );
     
+=item C<batch>
+
+Ordinarily items are passed to the worker one at a time. If you are
+processing a large number of items it may be more efficient to process
+them in batches. Specify the batch size using this option.
+
+Batching is transparent. Internally the iterators and worker are
+modified to batch and unbatch items.
+    
 =item C<nowarn>
 
 Normally C<iterate> will issue a warning on systems on which fork is not
@@ -469,6 +479,46 @@ sub _fork {
     };
 }
 
+sub _batch_input_iter {
+    my ( $code, $batch ) = @_;
+
+    return sub {
+        my @chunk = ();
+        while ( @chunk < $batch && ( my @next = $code->() ) ) {
+            push @chunk, \@next;
+        }
+        return @chunk ? ( 0, \@chunk ) : ();
+    };
+}
+
+sub _batch_output_iter {
+    my $code  = shift;
+    my @queue = ();
+    return sub {
+        unless ( @queue ) {
+            if ( my ( undef, $chunk ) = $code->() ) {
+                @queue = @$chunk;
+            }
+            else {
+                return;
+            }
+        }
+        return @{ shift @queue };
+    };
+    return $code;
+}
+
+sub _batch_worker {
+    my $code = shift;
+    return sub {
+        my ( undef, $chunk ) = @_;
+        for my $item ( @$chunk ) {
+            $item->[1] = $code->( @$item );
+        }
+        return $chunk;
+    };
+}
+
 sub iterate {
     my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
 
@@ -497,9 +547,21 @@ sub iterate {
         $options{workers} = 0;
     }
 
-    # OK. Ready. Let's do it.
-    return ( $options{workers} == 0 ? \&_nonfork : \&_fork )
-      ->( \%options, $worker, $iter );
+    my $factory = $options{workers} == 0 ? \&_nonfork : \&_fork;
+
+    if ( $options{batch} > 1 ) {
+        return _batch_output_iter(
+            $factory->(
+                \%options,
+                _batch_worker( $worker ),
+                _batch_input_iter( $iter, $options{batch} )
+            )
+        );
+    }
+    else {
+        # OK. Ready. Let's do it.
+        return $factory->( \%options, $worker, $iter );
+    }
 }
 
 =head2 C<< iterate_as_array >>
