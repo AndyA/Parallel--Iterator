@@ -11,7 +11,7 @@ use Config;
 
 require 5.008;
 
-our $VERSION = '0.5.0';
+our $VERSION = '0.6.0';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
@@ -27,7 +27,7 @@ Parallel::Iterator - Simple parallel execution
 
 =head1 VERSION
 
-This document describes Parallel::Iterator version 0.5.0
+This document describes Parallel::Iterator version 0.6.0
 
 =head1 SYNOPSIS
 
