@@ -360,14 +360,9 @@ sub _nonfork {
 sub _fork {
     my ( $options, $worker, $iter ) = @_;
 
-    # TODO: If we kept track of how many outstanding tasks each worker
-    # had we could load balance more effectively.
-
     my @workers      = ();
     my @result_queue = ();
     my $select       = IO::Select->new;
-
-    # Possibly modify the iterator here...
 
     return sub {
         LOOP: {
@@ -383,12 +378,11 @@ sub _fork {
                 pipe $my_rdr, $child_wtr
                   or croak "Can't open read pipe ($!)\n";
 
-                $select->add( [ $my_rdr, $my_wtr, 0 ] );
-
                 if ( my $pid = fork ) {
                     # Parent
                     close $_ for $child_rdr, $child_wtr;
                     push @workers, $pid;
+                    $select->add( [ $my_rdr, $my_wtr, 0 ] );
                     _put_obj( \@next, $my_wtr );
                 }
                 else {
@@ -435,6 +429,9 @@ sub _fork {
                                 die "Bad result type: $type";
                             }
 
+                            # We operate a strict one in, one out policy
+                            # - which avoids deadlocks. Having received
+                            # the previous result send a new work value.
                             unless ( $eof ) {
                                 if ( my @next = $iter->() ) {
                                     _put_obj( \@next, $wh );
@@ -475,7 +472,11 @@ sub _fork {
 sub iterate {
     my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
 
-    croak "iterate 2 or 3 args" unless @_ == 2;
+    croak "iterate takes 2 or 3 args" unless @_ == 2;
+
+    my @bad_opt = grep { !exists $DEFAULTS{$_} } keys %options;
+    croak "Unknown option(s): ", join( ', ', sort @bad_opt ), "\n"
+      if @bad_opt;
 
     my $worker = shift;
     croak "Worker must be a coderef"
