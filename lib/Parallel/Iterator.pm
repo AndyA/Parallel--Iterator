@@ -388,12 +388,6 @@ sub _nonfork {
     };
 }
 
-sub _rotate {
-    my $amount = shift() % @_;
-    my @l = splice @_, 0, $amount;
-    return ( @_, @l );
-}
-
 # Does this sub look a bit long to you? :)
 sub _fork {
     my ( $options, $worker, $iter ) = @_;
@@ -453,7 +447,6 @@ sub _fork {
             return @{ shift @result_queue } if @result_queue;
             if ( $select->count ) {
                 eval {
-                    # my @rdr = _rotate( $rotate++, $select->can_read );
                     my @rdr = $select->can_read;
                     # Anybody got completed work?
                     for my $r ( @rdr ) {

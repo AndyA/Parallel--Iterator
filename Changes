@@ -1,5 +1,11 @@
 Revision history for Parallel-Iterator
 
+0.7.0   Added batch and adaptive options.
+        Fixed load balancing inequality.
+
+0.6.0   2007-10-04
+        Fixed MANIFEST
+
 0.5.0   2007-10-04
         Made 0 worker option (non-forked) dclone its input data to
         achieve the same cloning effect that the forked version
