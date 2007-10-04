@@ -15,11 +15,10 @@ our $VERSION = '0.7.0';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
-# TODO: What happens on Windows with fork emulation enabled? Presumably
-# select() still can't handle pipe handles.
+use constant IS_WIN32 => ( $^O =~ /^(MS)?Win32$/ );
 
 my %DEFAULTS = (
-    workers => ( $Config{d_fork} ? 10 : 0 ),
+    workers => ( ( $Config{d_fork} && !IS_WIN32 ) ? 10 : 0 ),
     onerror => 'die',
     nowarn  => 0,
 );
@@ -102,8 +101,8 @@ Now write a function to synthesize a special kind of iterator:
         };
     }
 
-The returned iterator will return each element of the list and then
-undef. Actually it returns both the index I<and> the value of each
+The returned iterator will return each element of the array in turn and
+then undef. Actually it returns both the index I<and> the value of each
 element in the array. Because multiple instances of the transformation
 function execute in parallel the results won't necessarily come back in
 order. The array index will later allow us to put completed items in the
@@ -147,7 +146,73 @@ array instead:
 
     my %done = iterate_as_hash( \&worker, %jobs );
 
+=head2 How It Works
+
+The current process is forked once for each worker. Each forked child is
+connected to the parent by a pair of pipes. The child's STDIN, STDOUT
+and STDERR are unaffected.
+
+Input values are serialised (using Storable) and passed to the workers.
+Completed work items are serialised and returned.
+
 =head2 Caveats
+
+Parallel::Iterator is designed to be simple to use - but the underlying
+forking of the main process can cause mystifying problems unless you
+have an understanding of what is going on behind the scenes.
+
+=head3 Worker execution enviroment
+
+All code apart from the worker subroutine executes in the parent process
+as normal. The worker executes in a forked instance of the parent
+process. That means that things like this won't work as expected:
+
+    my %tally = ();
+    my @r = iterate_as_array( sub {
+        my ($id, $name) = @_;
+        $tally{$name}++;       # might not do what you think it does
+        return reverse $name;
+    }, @names );
+
+    # Now print out the tally...
+    while ( my ( $name, $count ) = each %tally ) {
+        printf("%5d : %s\n", $count, $name);
+    }
+
+Because the worker is a closure it can see the C<%tally> hash from its
+enclosing scope; but because it's running in a forked clone of the parent
+process it modifies its own copy of C<%tally> rather than the copy for
+the parent process.
+
+That means that after the job terminates the C<%tally> in the parent
+process will be empty.
+
+In general you should avoid side effects in your worker subroutines.
+
+=head3 Serialization
+
+Values are serialised using L<Storable> to pass to the worker subroutine
+and results from the worker are again serialised before being passed
+back. Be careful what your values refer to: everything has to be
+serialised. If there's an indirect way to reach a large object graph
+Storable will find it and performance will suffer.
+
+To find out how large your serialised values are serialise one of them
+and check its size:
+
+    use Storable qw( freeze );
+    my $serialized = freeze $some_obj;
+    print length($serialized), " bytes\n";
+
+In your tests you may wish to guard against the possibility of a change
+to the structure of your values resulting in a sudden increase in
+serialized size:
+
+    ok length(freeze $some_obj) < 1000, "Object too bulky?";
+
+See the documetation for L<Storable> for other caveats.
+
+=head3 Performance
 
 Process forking is expensive. Only use Parallel::Iterator in cases where:
 
@@ -185,15 +250,6 @@ parent use something like this to guard against multiple execution:
         }
     }
 
-=head2 How It Works
-
-The current process is forked once for each worker. Each forked child is
-connected to the parent by a pair of pipes. The child's STDIN, STDOUT
-and STDERR are unaffected.
-
-Input values are serialised (using Storable) and passed to the workers.
-Completed work items are serialised and returned.
-
 =head1 INTERFACE 
 
 =head2 C<< iterate( [ $options ], $trans, $iterator ) >>
@@ -204,13 +260,13 @@ each value returned by the input iterator.
 Instead of an iterator you may pass an array or hash reference and
 C<iterate> will convert it internally into a suitable iterator.
 
-If you are doing this you may with to investigate C<iterate_as_hash> and
+If you are doing this you may wish to investigate C<iterate_as_hash> and
 C<iterate_as_array>.
 
 =head3 Options
 
-A reference to a hash of options may be supplied. The following options
-are supported:
+A reference to a hash of options may be supplied as the first argument.
+The following options are supported:
 
 =over
 
@@ -477,7 +533,7 @@ returns a reference to the same hash.
 
 For this to work properly the input iterator must return (key, value)
 pairs. This allows the results to be placed in the correct slots in the
-output hash. The simplest way to do this is to pass an hash reference as
+output hash. The simplest way to do this is to pass a hash reference as
 the input iterator:
 
     my %output = iterate_as_hash( \&some_handler, \%input );
@@ -525,7 +581,7 @@ None reported.
 No bugs have been reported.
 
 Please report any bugs or feature requests to
-C<bug-parallel-workers@rt.cpan.org>, or through the web interface at
+C<bug-parallel-iterator@rt.cpan.org>, or through the web interface at
 L<http://rt.cpan.org>.
 
 =head1 AUTHOR
