@@ -2,6 +2,9 @@ Revision history for Parallel-Iterator
 
 0.4.0   2007-10-03
         Fixed tests on Windows.
+        Made 0 worker option (non-forked) dclone its input data to
+        achieve the same cloning effect that the forked version
+        exhibits.
 
 0.3.0   2007-10-02
         Made job output and result collection run in sync. Formally job

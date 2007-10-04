@@ -296,6 +296,8 @@ sub iterate {
             while ( 1 ) {
                 if ( my @next = $iter->() ) {
                     my ( $id, $work ) = @next;
+                    # dclone so that we have the same semantics as the
+                    # forked version.
                     $work = dclone $work if defined $work && ref $work;
                     my $result = eval { $worker->( $id, $work ) };
                     if ( my $err = $@ ) {
