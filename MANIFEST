@@ -11,10 +11,10 @@ t/010-basic.t
 t/020-data.t
 t/030-block.t
 t/040-batch.t
-t/060-nofork-basic.t
-t/070-nofork-data.t
-t/080-nofork-block.t
-t/090-nofork-batch.t
+t/050-nofork-basic.t
+t/060-nofork-data.t
+t/070-nofork-block.t
+t/080-nofork-batch.t
 t/lib/NoFork.pm
 xt/author/pod-coverage.t
 xt/author/pod.t
