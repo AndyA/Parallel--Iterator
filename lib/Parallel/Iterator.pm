@@ -15,6 +15,9 @@ our $VERSION = '0.7.0';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
+# TODO: What happens on Windows with fork emulation enabled? Presumably
+# select() still can't handle pipe handles.
+
 my %DEFAULTS = (
     workers => ( $Config{d_fork} ? 10 : 0 ),
     onerror => 'die',
@@ -243,18 +246,12 @@ that warning.
 
 =cut
 
-sub iterate {
-    my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
-
-    my $worker = shift;
-    croak "Worker must be a coderef"
-      unless 'CODE' eq ref $worker;
-
+sub _massage_iterator {
     my $iter = shift;
     if ( 'ARRAY' eq ref $iter ) {
         my @ar  = @$iter;
         my $pos = 0;
-        $iter = sub {
+        return sub {
             return if $pos >= @ar;
             my @r = ( $pos, $ar[$pos] );
             $pos++;
@@ -264,18 +261,171 @@ sub iterate {
     elsif ( 'HASH' eq ref $iter ) {
         my %h = %$iter;
         my @k = keys %h;
-        $iter = sub {
+        return sub {
             return unless @k;
             my $k = shift @k;
             return ( $k, $h{$k} );
         };
     }
     elsif ( 'CODE' eq ref $iter ) {
-        # do nothing
+        return $iter;
     }
     else {
         croak "Iterator must be a code, array or hash ref";
     }
+}
+
+sub _nonfork {
+    my ( $options, $worker, $iter ) = @_;
+
+    return sub {
+        while ( 1 ) {
+            if ( my @next = $iter->() ) {
+                my ( $id, $work ) = @next;
+                # dclone so that we have the same semantics as the
+                # forked version.
+                $work = dclone $work if defined $work && ref $work;
+                my $result = eval { $worker->( $id, $work ) };
+                if ( my $err = $@ ) {
+                    $options->{onerror}->( $id, $err );
+                }
+                else {
+                    return ( $id, $result );
+                }
+            }
+            else {
+                return;
+            }
+        }
+    };
+}
+
+# Does this sub look a bit long to you? :)
+sub _fork {
+    my ( $options, $worker, $iter ) = @_;
+
+    # TODO: If we kept track of how many outstanding tasks each worker
+    # had we could load balance more effectively.
+
+    my @workers      = ();
+    my @result_queue = ();
+    my $select       = IO::Select->new;
+
+    # Possibly modify the iterator here...
+
+    return sub {
+        LOOP: {
+            # Make new workers
+            if ( @workers < $options->{workers} && ( my @next = $iter->() ) ) {
+
+                my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
+                  = map IO::Handle->new, 1 .. 4;
+
+                pipe $child_rdr, $my_wtr
+                  or croak "Can't open write pipe ($!)\n";
+
+                pipe $my_rdr, $child_wtr
+                  or croak "Can't open read pipe ($!)\n";
+
+                $select->add( [ $my_rdr, $my_wtr, 0 ] );
+
+                if ( my $pid = fork ) {
+                    # Parent
+                    close $_ for $child_rdr, $child_wtr;
+                    push @workers, $pid;
+                    _put_obj( \@next, $my_wtr );
+                }
+                else {
+                    # Child
+                    close $_ for $my_rdr, $my_wtr;
+
+                    # Worker loop
+                    while ( defined( my $job = _get_obj( $child_rdr ) ) ) {
+                        my $result = eval { $worker->( @$job ) };
+                        my $err = $@;
+                        _put_obj(
+                            [
+                                $err
+                                ? ( 'E', $job->[0], $err )
+                                : ( 'R', $job->[0], $result )
+                            ],
+                            $child_wtr
+                        );
+                    }
+
+                    # End of stream
+                    _put_obj( undef, $child_wtr );
+                    close $_ for $child_rdr, $child_wtr;
+                    exit;
+                }
+            }
+
+            return @{ shift @result_queue } if @result_queue;
+            if ( $select->count ) {
+                eval {
+                    my @rdr = $select->can_read;
+                    # Anybody got completed work?
+                    for my $r ( @rdr ) {
+                        my ( $rh, $wh, $eof ) = @$r;
+                        if ( defined( my $results = _get_obj( $rh ) ) ) {
+                            my $type = shift @$results;
+                            if ( $type eq 'R' ) {
+                                push @result_queue, $results;
+                            }
+                            elsif ( $type eq 'E' ) {
+                                $options->{onerror}->( @$results );
+                            }
+                            else {
+                                die "Bad result type: $type";
+                            }
+
+                            unless ( $eof ) {
+                                if ( my @next = $iter->() ) {
+                                    _put_obj( \@next, $wh );
+                                }
+                                else {
+                                    _put_obj( undef, $wh );
+                                    close $wh;
+                                    @{$r}[ 1, 2 ] = ( undef, 1 );
+                                }
+                            }
+                        }
+                        else {
+                            $select->remove( $r );
+                            close $rh;
+                        }
+                    }
+                };
+
+                if ( my $err = $@ ) {
+                    # Finish all the workers
+                    _put_obj( undef, $_->[1] ) for $select->handles;
+
+                    # And wait for them to exit
+                    waitpid( $_, 0 ) for @workers;
+
+                    # Rethrow
+                    die $err;
+                }
+
+                redo LOOP;
+            }
+            waitpid( $_, 0 ) for @workers;
+            return;
+        }
+    };
+}
+
+sub iterate {
+    my %options = ( %DEFAULTS, %{ 'HASH' eq ref $_[0] ? shift : {} } );
+
+    croak "iterate 2 or 3 args" unless @_ == 2;
+
+    my $worker = shift;
+    croak "Worker must be a coderef"
+      unless 'CODE' eq ref $worker;
+
+    my $iter = _massage_iterator( shift );
 
     if ( $options{onerror} =~ /^(die|warn)$/ ) {
         $options{onerror} = eval "sub { shift; $1 shift }";
@@ -285,148 +435,14 @@ sub iterate {
       unless 'CODE' eq ref $options{onerror};
 
     if ( $options{workers} > 0 && $DEFAULTS{workers} == 0 ) {
-        warn "Fork not available, falling back to single process mode\n"
+        warn "Fork not available; falling back to single process mode\n"
           unless $options{nowarn};
         $options{workers} = 0;
     }
 
-    if ( $options{workers} == 0 ) {
-        # Non-forking version
-        return sub {
-            while ( 1 ) {
-                if ( my @next = $iter->() ) {
-                    my ( $id, $work ) = @next;
-                    # dclone so that we have the same semantics as the
-                    # forked version.
-                    $work = dclone $work if defined $work && ref $work;
-                    my $result = eval { $worker->( $id, $work ) };
-                    if ( my $err = $@ ) {
-                        $options{onerror}->( $next[0], $err );
-                    }
-                    else {
-                        return ( $next[0], $result );
-                    }
-                }
-                else {
-                    return;
-                }
-            }
-        };
-    }
-    else {
-
-        # TODO: If we kept track of how many outstanding tasks each worker
-        # had we could load balance more effectively.
-
-        my @workers      = ();
-        my @result_queue = ();
-        my $select       = IO::Select->new;
-
-        # Possibly modify the iterator here...
-
-        return sub {
-            LOOP: {
-                # Make new workers
-                if ( @workers < $options{workers} && ( my @next = $iter->() ) )
-                {
-
-                    my ( $my_rdr, $my_wtr, $child_rdr, $child_wtr )
-                      = map IO::Handle->new, 1 .. 4;
-
-                    pipe $child_rdr, $my_wtr
-                      or croak "Can't open write pipe ($!)\n";
-
-                    pipe $my_rdr, $child_wtr
-                      or croak "Can't open read pipe ($!)\n";
-
-                    $select->add( [ $my_rdr, $my_wtr, 0 ] );
-
-                    if ( my $pid = fork ) {
-                        # Parent
-                        close $_ for $child_rdr, $child_wtr;
-                        push @workers, $pid;
-                        _put_obj( \@next, $my_wtr );
-                    }
-                    else {
-                        # Child
-                        close $_ for $my_rdr, $my_wtr;
-
-                        # Worker loop
-                        while ( defined( my $job = _get_obj( $child_rdr ) ) ) {
-                            my $result = eval { $worker->( @$job ) };
-                            my $err = $@;
-                            _put_obj(
-                                [
-                                    $err
-                                    ? ( 'E', $job->[0], $err )
-                                    : ( 'R', $job->[0], $result )
-                                ],
-                                $child_wtr
-                            );
-                        }
-
-                        # End of stream
-                        _put_obj( undef, $child_wtr );
-                        close $_ for $child_rdr, $child_wtr;
-                        exit;
-                    }
-                }
-
-                return @{ shift @result_queue } if @result_queue;
-                if ( $select->count ) {
-                    eval {
-                        my @rdr = $select->can_read;
-                        # Anybody got completed work?
-                        for my $r ( @rdr ) {
-                            my ( $rh, $wh, $eof ) = @$r;
-                            if ( defined( my $results = _get_obj( $rh ) ) ) {
-                                my $type = shift @$results;
-                                if ( $type eq 'R' ) {
-                                    push @result_queue, $results;
-                                }
-                                elsif ( $type eq 'E' ) {
-                                    $options{onerror}->( @$results );
-                                }
-                                else {
-                                    die "Bad result type: $type";
-                                }
-
-                                unless ( $eof ) {
-                                    if ( my @next = $iter->() ) {
-                                        _put_obj( \@next, $wh );
-                                    }
-                                    else {
-                                        _put_obj( undef, $wh );
-                                        close $wh;
-                                        @{$r}[ 1, 2 ] = ( undef, 1 );
-                                    }
-                                }
-                            }
-                            else {
-                                $select->remove( $r );
-                                close $rh;
-                            }
-                        }
-                    };
-
-                    if ( my $err = $@ ) {
-                        # Finish all the workers
-                        _put_obj( undef, $_->[1] ) for $select->handles;
-
-                        # And wait for them to exit
-                        waitpid( $_, 0 ) for @workers;
-
-                        # Rethrow
-                        die $err;
-                    }
-
-                    redo LOOP;
-                }
-                waitpid( $_, 0 ) for @workers;
-                return;
-            }
-        };
-    }
+    # OK. Ready. Let's do it.
+    return ( $options{workers} == 0 ? \&_nonfork : \&_fork )
+      ->( \%options, $worker, $iter );
 }
 
 =head2 C<< iterate_as_array >>
