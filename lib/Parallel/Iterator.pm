@@ -696,6 +696,10 @@ L<http://rt.cpan.org>.
 
 Andy Armstrong  C<< <andy@hexten.net> >>
 
+=head1 THANKS
+
+Aristotle Pagaltzis for the END handling suggestion and patch.
+
 =head1 LICENCE AND COPYRIGHT
 
 Copyright (c) 2007, Andy Armstrong C<< <andy@hexten.net> >>. All rights reserved.

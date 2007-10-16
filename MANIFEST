@@ -1,6 +1,7 @@
 Build.PL
 Changes
 examples/cpan-faces.pl
+examples/speedy.pl
 lib/Parallel/Iterator.pm
 Makefile.PL
 MANIFEST
