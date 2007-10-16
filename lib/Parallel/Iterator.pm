@@ -239,19 +239,6 @@ they take.
 
 =back
 
-=head3 END blocks
-
-Because the current process forks any END blocks will be executed once
-for each child. If it's important that an END block execute only in the
-parent use something like this to guard against multiple execution:
-
-    my $pid = $$;       # in parent
-    END {
-        if ( $$ == pid ) {
-            # Do END stuff in parent only
-        }
-    }
-
 =head1 INTERFACE 
 
 =head2 C<< iterate( [ $options ], $worker, $iterator ) >>
@@ -422,6 +409,10 @@ sub _fork {
                 else {
                     # Child
                     close $_ for $my_rdr, $my_wtr;
+
+                    # Don't execute any END blocks
+                    use POSIX '_exit';
+                    eval q{END { _exit 0 }};
 
                     # Worker loop
                     while ( defined( my $job = _get_obj( $child_rdr ) ) ) {
@@ -704,6 +695,10 @@ L<http://rt.cpan.org>.
 =head1 AUTHOR
 
 Andy Armstrong  C<< <andy@hexten.net> >>
+
+=head1 THANKS
+
+Aristotle Pagaltzis for the END handling suggestion and patch.
 
 =head1 LICENCE AND COPYRIGHT
 
