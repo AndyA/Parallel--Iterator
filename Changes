@@ -1,5 +1,9 @@
 Revision history for Parallel-Iterator
 
+0.8.0   2007-10-15
+        Only execute END blocks in parent process. Thanks to Aristotle
+        Pagaltzis for the suggestion and patch.
+
 0.7.0   Added batch and adaptive options.
         Fixed load balancing inequality.
 
