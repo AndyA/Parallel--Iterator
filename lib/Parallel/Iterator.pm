@@ -267,8 +267,8 @@ forking) on those that do not.
 
 =item C<nowarn>
 
-Normally C<iterate> will issue a warning on systems on which fork is not
-available and fall back to single process mode. This option supresses
+Normally C<iterate> will issue a warning and fall back to single process
+mode on systems on which fork is not available. This option supresses
 that warning.
 
 =item C<batch>
@@ -276,6 +276,10 @@ that warning.
 Ordinarily items are passed to the worker one at a time. If you are
 processing a large number of items it may be more efficient to process
 them in batches. Specify the batch size using this option.
+
+Batching is transparent from the caller's perspective. Internally it
+modifies the iterators and worker (by wrapping them in additional
+closures) so that they pack, process and unpack chunks of work.
 
 =item C<adaptive>
 
