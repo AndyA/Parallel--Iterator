@@ -1,6 +1,7 @@
 ---
 name: Parallel-Iterator
-version: 0.9.0
+version: 1.00
+
 
 author:
   - 'Andy Armstrong <andy@hexten.net>'
@@ -18,7 +19,8 @@ requires:
 provides:
   Parallel::Iterator:
     file: lib/Parallel/Iterator.pm
-    version: 0.9.0
+    version: 1.00
+
 
 generated_by: Module::Build version 0.2808
 meta-spec:
