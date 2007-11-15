@@ -1,5 +1,10 @@
 Revision history for Parallel-Iterator
 
+1.00    2007-11-15
+        Use CORE::exit for mod_perl compatibility. Thanks to Michael
+        Lackhoff for the fix.
+        Switched to n.nn version numbering.
+
 0.8.0   2007-10-15
         Only execute END blocks in parent process. Thanks to Aristotle
         Pagaltzis for the suggestion and patch.

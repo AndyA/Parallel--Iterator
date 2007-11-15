@@ -11,7 +11,7 @@ use Config;
 
 require 5.008;
 
-our $VERSION = '0.9.0';
+our $VERSION = '1.01';
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
@@ -31,7 +31,7 @@ Parallel::Iterator - Simple parallel execution
 
 =head1 VERSION
 
-This document describes Parallel::Iterator version 0.9.0
+This document describes Parallel::Iterator version 1.01
 
 =head1 SYNOPSIS
 
@@ -435,7 +435,8 @@ sub _fork {
                     # End of stream
                     _put_obj( undef, $child_wtr );
                     close $_ for $child_rdr, $child_wtr;
-                    exit;
+                    # We use CORE::exit for MP compatibility
+                    CORE::exit;
                 }
             }
 
