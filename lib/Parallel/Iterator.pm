@@ -3,15 +3,20 @@ package Parallel::Iterator;
 
 use warnings;
 use strict;
+
 use Carp;
-use Storable qw( store_fd fd_retrieve dclone );
+use Config;
+use Data::Dumper;
 use IO::Handle;
 use IO::Select;
-use Config;
+use Storable qw( store_fd fd_retrieve dclone );
 
 require 5.008;
 
 our $VERSION = '1.01';
+
+our $UseDumper = 0;
+
 use base qw( Exporter );
 our @EXPORT_OK = qw( iterate iterate_as_array iterate_as_hash );
 
@@ -662,15 +667,39 @@ sub iterate_as_hash {
   return wantarray ? %out : \%out;
 }
 
+sub _read {
+  my ( $fd, $len ) = @_;
+  my $buf = '';
+
+  until ( length $buf == $len ) {
+    my $got = sysread $fd, $buf, $len - length $buf, length $buf;
+    die "Communication error: $!" unless defined $got;
+    die "Internal error: EOF" unless $got;
+  }
+  return $buf;
+}
+
 sub _get_obj {
   my $fd = shift;
-  my $r  = fd_retrieve $fd;
-  return $r->[0];
+  if ( $UseDumper ) {
+    return eval _read( $fd, _read( $fd, 8 ) + 0 );
+  }
+  else {
+    return fd_retrieve( $fd )->[0];
+  }
 }
 
 sub _put_obj {
   my ( $obj, $fd ) = @_;
-  store_fd [$obj], $fd;
+  if ( $UseDumper ) {
+    my $d = Data::Dumper->new( [$obj] );
+    $d->Purity( 1 )->Terse( 1 );
+    my $data = $d->Dump;
+    print $fd sprintf( '%08d', length $data ), $data;
+  }
+  else {
+    store_fd [$obj], $fd;
+  }
   $fd->flush;
 }
 

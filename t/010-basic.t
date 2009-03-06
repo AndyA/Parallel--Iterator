@@ -4,6 +4,8 @@ use warnings;
 use Test::More tests => 13;
 use Parallel::Iterator qw( iterate iterate_as_array iterate_as_hash );
 
+#$Parallel::Iterator::UseDumper = 1;
+
 sub array_iter {
   my @ar  = @_;
   my $pos = 0;
