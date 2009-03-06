@@ -13,5 +13,5 @@ my @g = iterate_as_array( sub { $_[1] x 2 }, \@d );
 # print join("\n", @g), "\n";
 
 END {
-    print "END in $$\n";
+  print "END in $$\n";
 }

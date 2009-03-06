@@ -5,7 +5,7 @@ package NoFork;
 # project. Thanks Eric - it's just what I needed :)
 
 BEGIN {
-    *CORE::GLOBAL::fork = sub { die "you should not fork" };
+  *CORE::GLOBAL::fork = sub { die "you should not fork" };
 }
 use Config;
 tied( %Config )->{d_fork} = 0;    # blatant lie
