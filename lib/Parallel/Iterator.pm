@@ -1,4 +1,3 @@
-# $Id$
 package Parallel::Iterator;
 
 use warnings;
